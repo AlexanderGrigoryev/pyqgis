@@ -29,5 +29,5 @@
 
 
 if __name__ == "__main__":
-    from utils import Utils
-    Utils.Compiler.execute(prefix="agg_")
+    from _lib.utils import Utils
+    Utils.Compiler.execute(prefix="agg_", publish=True)
