@@ -1,0 +1,21 @@
+[general]
+name=Простые примеры инструментов
+qgisMinimumVersion=3.0
+description=Вызов диалога по кнопке
+version=0.1
+author=agg
+email=a@b.ru
+about=Простые примеры инструментов: Вызов диалога по кнопке
+tracker=http://bugs
+repository=http://repo
+hasProcessingProvider=no
+# changelog=
+tags=python
+homepage=http://homepage
+category=Plugins
+icon=.\lib\img\soska.png
+experimental=True
+deprecated=False
+# plugin_dependencies=
+# category=
+server=False
