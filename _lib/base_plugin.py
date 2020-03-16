@@ -10,30 +10,33 @@ class BasePlugin:
 
     __metaclass__ = ABCMeta
 
-    def __init__(self, iface, folder, icon, tool, tools, dialog):
+    def __init__(self, iface, folder, icon, tool, tools, dialog, ui_file):
         self.iface = iface
         self.img_folder = os.path.join(folder, 'lib', 'img')
+        self.ui_folder = os.path.join(folder, 'ui')
         self.menu = Tool.MENU
         self.logo = self.q_icon('logo.png')
         self.icon = self.q_icon(icon)
         self.tool = tool
         self.tools = tools
 
-        self._msg = QMessageBox()
-        self._msg.setWindowTitle(self.tool)
-        self._msg.setWindowIcon(self.icon)
-        self._msg.setWindowModality(Qt.ApplicationModal)
-
-        self._dlg = None
-        if dialog:
-            self._dlg = dialog()
-            self._dlg.setWindowTitle(self.tool)
-            self._dlg.setWindowIcon(self.icon)
+        self._msg = self.q_dialog(QMessageBox)
+        self._dlg = self.q_dialog(dialog, ui_file)
 
         self.root_menu = self.iface.pluginMenu()
         self.sub_menu = None
         self.tool_menu = None
+        self.active_tool = None
         self.action = None
+
+    def q_dialog(self, dialog, ui_file=None, title=None, icon=None):
+        result = None
+        if dialog:
+            result = dialog(os.path.join(self.ui_folder, ui_file)) if ui_file else dialog()
+            result.setWindowTitle(title if title else self.tool)
+            result.setWindowIcon(icon if icon else self.icon)
+            result.setWindowModality(Qt.ApplicationModal)
+        return result
 
     def q_icon(self, file_name):
         return QIcon(os.path.join(self.img_folder, file_name))

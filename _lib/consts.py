@@ -4,9 +4,13 @@ class Keys:
     name = 'name'
     icon = 'icon'
     callback = 'callback'
+    dialog = 'dialog'
 
     class Tool:
-        pass
+        """ключи доступа к настройкам инструментов"""
+        point = 'point'
+        line = 'line'
+        polygon = 'polygon'
 
 
 class Header:
@@ -17,6 +21,9 @@ class Header:
 class Tool:
     """названия инструментов"""
     MENU = u'&Простые примеры инструментов'
+    point = u'Рисование точкек'
+    line = u'Рисование линий'
+    polygon = u'Рисование многоугольников'
 
 
 class Messages:
