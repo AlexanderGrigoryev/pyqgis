@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/plugins/agg_checks" >
+        <file>/lib/img/rings.png</file>
+        <file>/lib/img/logo.png</file>
+    </qresource>
+</RCC>
