@@ -1,9 +1,9 @@
+import os.path
+from abc import ABCMeta, abstractmethod
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QMessageBox, QMenu, QAction
-import os.path
 from .consts import Tool, Keys as k
-from abc import ABCMeta, abstractmethod
 
 
 class BasePlugin:
@@ -20,7 +20,7 @@ class BasePlugin:
         self.tool = tool
         self.tools = tools
 
-        self._msg = self.q_dialog(QMessageBox)
+        self._msg = self.q_msg()
         self._dlg = self.q_dialog(dialog, ui_file)
 
         self.root_menu = self.iface.pluginMenu()
@@ -29,13 +29,31 @@ class BasePlugin:
         self.active_tool = None
         self.action = None
 
+    def q_msg(self):
+        result = QMessageBox()
+        result.setWindowTitle(self.tool)
+        result.setWindowIcon(self.icon)
+        result.setModal(True)
+        result.setWindowModality(Qt.ApplicationModal)
+        return result
+
     def q_dialog(self, dialog, ui_file=None, title=None, icon=None):
         result = None
         if dialog:
-            result = dialog(os.path.join(self.ui_folder, ui_file)) if ui_file else dialog()
+            result = dialog(owner=self, ui_file=os.path.join(self.ui_folder, ui_file)) if ui_file else dialog()
             result.setWindowTitle(title if title else self.tool)
             result.setWindowIcon(icon if icon else self.icon)
+            result.setModal(True)
             result.setWindowModality(Qt.ApplicationModal)
+            if result.is_wizard:
+                result.setWindowFlags(
+                    Qt.Window |
+                    Qt.CustomizeWindowHint |
+                    Qt.WindowTitleHint |
+                    Qt.WindowCloseButtonHint |
+                    Qt.WindowStaysOnTopHint)
+                result.setModal(False)
+                result.setWindowModality(Qt.NonModal)
         return result
 
     def q_icon(self, file_name):

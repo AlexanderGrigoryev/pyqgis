@@ -64,13 +64,8 @@ class Utils:
 
         @staticmethod
         def layers():
-            """список слоёв без групп"""
-            return [node.layer() for node in QgsProject().instance().layerTreeRoot().children() if node.isLayer()]
-
-        @staticmethod
-        def groups():
-            """список групп без слоёв"""
-            return [node for node in QgsProject().instance().layerTreeRoot().children() if node.isGroup()]
+            """список слоёв"""
+            return [node.layer() for node in QgsProject().instance().layerTreeRoot().children()]
 
         @staticmethod
         def selection(only_active=True):
@@ -84,7 +79,10 @@ class Utils:
         @staticmethod
         def selection(only_active=True):
             """список выбранных фич"""
-            return sum([layer.selectedFeatures() for layer in Utils.Map.selection(only_active)])
+            features = []
+            for layer in Utils.Map.selection(only_active):
+                features += layer.selectedFeatures()
+            return features
 
     class Geometry:
         """общие методы для работы с геометрией"""
