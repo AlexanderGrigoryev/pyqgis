@@ -5,11 +5,12 @@ class Keys:
     icon = 'icon'
     callback = 'callback'
     dialog = 'dialog'
+    geometry = 'geometry'
 
     class Tool:
         """ключи доступа к настройкам инструментов"""
         point = 'point'
-        line = 'line'
+        line = 'linestring'
         polygon = 'polygon'
 
 
@@ -26,11 +27,19 @@ class Tool:
     polygon = u'Рисование многоугольников'
 
 
+class Layer:
+    """названия слоёв"""
+    point = u'Слой точек'
+    line = u'Слой линий'
+    polygon = u'Слой многоугольников'
+
+
 class Messages:
     """сообщения, вопросы и т.д."""
     READY = u'Готово'
     ERROR = u'Ошибка'
-    OPEN_MAP = u'Откройте окно карты'
+    OPEN_MAP = u'Откройте карту'
+    CLOSE_MAP = u'Закройте карту'
     CHOOSE_OBJECT = u'Выберите один объект'
     CHOOSE_OBJECTS = u'Выберите один или несколько объектов'
     UNKNOWN_GEOMETRY_TYPE = u'Тип геометрии не обрабатывается инструментом'

@@ -1,6 +1,8 @@
 import os
+import time
 import zipfile
 import shutil
+import random
 
 from qgis.core import *
 from qgis.utils import iface
@@ -14,9 +16,9 @@ class Utils:
 
         @staticmethod
         def publish(plugin):
-            plugin_path =os.environ['QGIS_PLUGINPATH'].split(';')[0]
+            plugin_folder = Utils.System.qgis_plugin_folder()
             target = zipfile.ZipFile(".\\compiled\\%s.zip" % plugin, "r", zipfile.ZIP_DEFLATED)
-            target.extractall(plugin_path)
+            target.extractall(plugin_folder)
             target.close()
 
         @staticmethod
@@ -73,8 +75,63 @@ class Utils:
             layers = [iface.activeLayer()] if only_active else Utils.Map.layers()
             return [layer for layer in layers if len(layer.selectedFeatures()) > 0]
 
+        @staticmethod
+        def new_layer(name, geometry, driver='memory'):
+            """вернёт новый временный слой"""
+            layers = QgsProject().instance().mapLayersByName(name)
+            layer = layers[0] if layers else None
+            if not layer:
+                url = '%s?crs=epsg:4326' % geometry
+                layer = QgsVectorLayer(url, name, driver)
+                layer.setCrs(QgsProject().instance().crs())
+                QgsProject().instance().addMapLayer(layer)
+                iface.mapCanvas().refresh()
+            return layer
+
+        @staticmethod
+        def remove_layer(name):
+            """удалит с карты все слои, найденные по имени"""
+            layer_ids = [layer.id() for layer in QgsProject().instance().mapLayersByName(name)]
+            QgsProject().instance().removeMapLayers(layer_ids) if layer_ids else None
+            iface.mapCanvas().refresh()
+
+        @staticmethod
+        def is_point_layer(layer):
+            return layer.wkbType() in (QgsWkbTypes.Point, QgsWkbTypes.MultiPoint)
+
+        @staticmethod
+        def is_line_layer(layer):
+            return layer.wkbType() in (QgsWkbTypes.LineString, QgsWkbTypes.MultiLineString)
+
+        @staticmethod
+        def is_polygon_layer(layer):
+            return layer.wkbType() in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
+
     class Feature:
         """общие методы для работы с фичами и их атрибутами"""
+
+        @staticmethod
+        def new_feature(layer, points, values):
+            """
+            создает новую фичу на слое layer, с соответствующей геометрией и координатами points, заполняя
+            все возможные атрибуты из словаря values
+            """
+            geometry = None
+            if Utils.Map.is_point_layer(layer):
+                geometry = Utils.Geometry.point(points[0].x(), points[0].y())
+            if Utils.Map.is_line_layer(layer):
+                geometry = Utils.Geometry.line(points)
+            if Utils.Map.is_polygon_layer(layer):
+                geometry = Utils.Geometry.polygon(points)
+            if not geometry:
+                return None
+            attributes = [values[field_name] if field_name in values else None
+                          for field_name in layer.fields().names()]
+            feature = QgsFeature()
+            feature.setGeometry(geometry)
+            feature.setAttributes(attributes)
+            layer.dataProvider().addFeature(feature)
+            layer.updateExtents()
 
         @staticmethod
         def selection(only_active=True):
@@ -86,6 +143,15 @@ class Utils:
 
     class Geometry:
         """общие методы для работы с геометрией"""
+
+        @classmethod
+        def random_points(cls, min_count, max_count):
+            """
+            возвращает список точек в количестве от min_count до max_count
+            в начале координат с небольшими отклонениями
+            """
+            return [cls.to_pointXY(x=random.random(), y=random.random())
+                    for n in range(random.randrange(min_count, max_count, 1))]
 
         @staticmethod
         def as_pointXY(p):
@@ -161,3 +227,33 @@ class Utils:
         def geometry(types, only_active=True):
             """выбранная геометрия имет один из указанных типов"""
             return all(layer.wkbType() in types for layer in Utils.Map.selection(only_active))
+
+    class System:
+        """общие системные утилиты, которые можно использовать не только для написания плагинов QGIS"""
+
+        @staticmethod
+        def time_file(extension=None):
+            name = time.strftime('%Y.%m.%d_%H-%M-%S')
+            return '%s.%s' % (name, extension) if extension else name
+
+        @staticmethod
+        def time_folder(root):
+            return os.path.join(root, Utils.System.time_file())
+
+        @staticmethod
+        def desktop_folder():
+            return os.path.join(os.environ["USERPROFILE"], "Desktop")
+
+        @staticmethod
+        def qgis_plugin_folder():
+            return os.environ['QGIS_PLUGINPATH'].split(';')[0]
+
+        @staticmethod
+        def new_file(folder, name):
+            """создаёт новый файл с недостающими папками"""
+            file_path = os.path.join(folder, name)
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+            with open(file_path, mode='w', encoding='utf-8'):
+                pass
+            return file_path
