@@ -1,6 +1,6 @@
 import os.path
 from abc import ABCMeta, abstractmethod
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QSize
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QMessageBox, QMenu, QAction
 from .consts import Tool, Keys as k
@@ -43,6 +43,7 @@ class BasePlugin:
             result = dialog(owner=self, ui_file=os.path.join(self.ui_folder, ui_file)) if ui_file else dialog()
             result.setWindowTitle(title if title else self.tool)
             result.setWindowIcon(icon if icon else self.icon)
+            result.logo.setPixmap(self.logo.pixmap(QSize(16, 16)))
             result.setModal(True)
             result.setWindowModality(Qt.ApplicationModal)
             if result.is_wizard:
