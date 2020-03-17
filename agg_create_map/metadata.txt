@@ -1,0 +1,21 @@
+[general]
+name=Простые примеры инструментов
+qgisMinimumVersion=3.0
+description=Создание карты
+version=0.1
+author=agg
+email=a@b.ru
+about=В примере представлено динамическое создание и заполнение карты: создание проекта, слоёв, добавление фич, геометрии и заполнение атрибутов
+tracker=http://bugs
+repository=http://repo
+hasProcessingProvider=no
+# changelog=
+tags=python
+homepage=http://homepage
+category=Plugins
+icon=.\lib\img\layers.png
+experimental=True
+deprecated=False
+# plugin_dependencies=
+# category=
+server=False
