@@ -7,6 +7,7 @@ import re
 
 from qgis.core import *
 from qgis.utils import iface
+from qgis.PyQt.QtWidgets import QFileDialog
 
 from .consts import Keys as k, SymbolProp as kp
 
@@ -72,6 +73,11 @@ class Utils:
             """список слоёв"""
             return [node.layer() for node in QgsProject().instance().layerTreeRoot().children()
                     if node.layer().isEditable() or not only_editable]
+
+        @staticmethod
+        def nodes():
+            """список узлов дерева слоёв карты"""
+            return QgsProject().instance().layerTreeRoot().children()
 
         @staticmethod
         def selection(only_active=True):
@@ -163,6 +169,11 @@ class Utils:
             layer.setLabeling(labeling)
             layer.setLabelsEnabled(True)
             layer.triggerRepaint() if repaint else None
+
+        @staticmethod
+        def combine_geometry(features):
+            """вернёт объединенную геометрию всех фич в одну"""
+            return Utils.Geometry.combine(geometries=[x.geometry() for x in features])
 
     class Geometry:
         """общие методы для работы с геометрией"""
@@ -374,6 +385,14 @@ class Utils:
             point = cls.point(p.x(), p.y())
             return segment.boundingBoxIntersects(point)
 
+        @staticmethod
+        def combine(geometries):
+            """вернёт комбинированную геометрию"""
+            result = None
+            for g in geometries:
+                result = g.combine(result) if result else g
+            return result
+
     class Check:
         """общие проверки перед использованием или в процессе использования инструментов"""
 
@@ -445,6 +464,10 @@ class Utils:
         """общие системные утилиты, которые можно использовать не только для написания плагинов QGIS"""
 
         @staticmethod
+        def choose_folder():
+            return QFileDialog.getExistingDirectory()
+
+        @staticmethod
         def time_file(extension=None):
             name = time.strftime('%Y.%m.%d_%H-%M-%S')
             return '%s.%s' % (name, extension) if extension else name
@@ -477,3 +500,17 @@ class Utils:
             with open(tab_file, encoding='cp1251') as f:
                 return [line.strip().replace(';', '').split(chr(32))[0]
                         for line in f.readlines() if line.strip().endswith(';')]
+
+        @staticmethod
+        def copy(src, trg, mask=None):
+            """копирование всех файлов в папке, если не указана маска, иначе - только фалы соответствующие маске"""
+            if not mask:
+                shutil.copytree(src, trg)
+            else:
+                mask = mask.replace('*', '')
+                for root, dirs, files in os.walk(src):
+                    if dirs:
+                        continue
+                    for file in files:
+                        if file.startswith(mask):
+                            shutil.copyfile(os.path.join(root, file), os.path.join(trg, file))
