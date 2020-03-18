@@ -80,12 +80,12 @@ class Utils:
             return [layer for layer in layers if len(layer.selectedFeatures()) > 0]
 
         @staticmethod
-        def new_layer(name, geometry, driver='memory'):
+        def new_layer(name, wkb_type, driver='memory'):
             """вернёт новый временный слой"""
             layers = QgsProject().instance().mapLayersByName(name)
             layer = layers[0] if layers else None
             if not layer:
-                url = '%s?crs=epsg:4326' % geometry
+                url = '%s?crs=epsg:4326' % Utils.Geometry.wkt_type(wkb_type)
                 layer = QgsVectorLayer(url, name, driver)
                 layer.setCrs(QgsProject().instance().crs())
                 QgsProject().instance().addMapLayer(layer)
@@ -176,6 +176,8 @@ class Utils:
                 cls.__profile = {
                     (QgsWkbTypes.Point, QgsWkbTypes.MultiPoint): {
                         k.title: u'Точка',
+                        k.wkt_single_type: 'Point',
+                        k.wkt_multi_type: 'MultiPoint',
                         k.icon: QIcon(os.path.join(os.path.dirname(__file__), 'img', 'point.png')),
                         QgsSimpleMarkerSymbolLayer: {
                             kp.ru.size: (kp.en.size, kp.en.size_unit, kp.en.size_map_unit_scale),
@@ -200,6 +202,8 @@ class Utils:
                     },
                     (QgsWkbTypes.LineString, QgsWkbTypes.MultiLineString): {
                         k.title: u'Линия',
+                        k.wkt_single_type: 'LineString',
+                        k.wkt_multi_type: 'MultiLineString',
                         k.icon: QIcon(os.path.join(os.path.dirname(__file__), 'img', 'cut.png')),
                         QgsSimpleLineSymbolLayer: {
                             kp.ru.line_color: (kp.en.line_color,),
@@ -223,6 +227,8 @@ class Utils:
                     },
                     (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon): {
                         k.title: u'Полигон',
+                        k.wkt_single_type: 'Polygon',
+                        k.wkt_multi_type: 'MultiPolygon',
                         k.icon: QIcon(os.path.join(os.path.dirname(__file__), 'img', 'polygon.png')),
                         QgsSimpleFillSymbolLayer: {
                             kp.ru.color: (kp.en.color,),
@@ -258,6 +264,14 @@ class Utils:
                     }
                 }
             return cls.__profile[key] if key else cls.__profile
+
+        @classmethod
+        def wkt_type(cls, wkb_type, multi=False):
+            """возвращает название WKT-типа для указанного WKB-типа"""
+            for key in cls.profile().keys():
+                if wkb_type in key:
+                    return cls.profile()[key][k.wkt_multi_type if multi else k.wkt_single_type]
+            return None
 
         @classmethod
         def types_by_type(cls, wkb_type):

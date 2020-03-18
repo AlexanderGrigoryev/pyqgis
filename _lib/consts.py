@@ -12,6 +12,8 @@ class Keys:
     features = 'features'
     layer = 'layer'
     wkb_type = 'wkb_type'
+    wkt_single_type = 'wkt_single_type'
+    wkt_multi_type = 'wkt_multi_type'
     renderer = 'renderer'
     symbol_layers = 'symbol_layers'
     bounds = 'bounds'
@@ -38,6 +40,9 @@ class Keys:
     to_point = 'to_point'
     distance = 'distance'
     save = 'save'
+    inside = 'inside'
+    outside = 'outside'
+    mask = 'mask'
 
     class Tool:
         """ключи доступа к настройкам инструментов"""
