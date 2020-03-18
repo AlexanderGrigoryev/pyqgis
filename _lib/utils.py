@@ -3,9 +3,12 @@ import time
 import zipfile
 import shutil
 import random
+import re
 
 from qgis.core import *
 from qgis.utils import iface
+
+from .consts import Keys as k, SymbolProp as kp
 
 
 class Utils:
@@ -65,9 +68,10 @@ class Utils:
         """общие методы для работы со структурой карты"""
 
         @staticmethod
-        def layers():
+        def layers(only_editable=False):
             """список слоёв"""
-            return [node.layer() for node in QgsProject().instance().layerTreeRoot().children()]
+            return [node.layer() for node in QgsProject().instance().layerTreeRoot().children()
+                    if node.layer().isEditable() or not only_editable]
 
         @staticmethod
         def selection(only_active=True):
@@ -107,6 +111,16 @@ class Utils:
         def is_polygon_layer(layer):
             return layer.wkbType() in (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon)
 
+        @staticmethod
+        def save():
+            for layer in Utils.Map.layers(only_editable=True):
+                layer.commitChanges()
+
+        @staticmethod
+        def discard():
+            for layer in Utils.Map.layers(only_editable=True):
+                layer.rollBack()
+
     class Feature:
         """общие методы для работы с фичами и их атрибутами"""
 
@@ -141,8 +155,133 @@ class Utils:
                 features += layer.selectedFeatures()
             return features
 
+        @staticmethod
+        def labeling(layer, attribute, repaint=False):
+            settings = QgsPalLayerSettings()
+            settings.fieldName = attribute
+            labeling = QgsVectorLayerSimpleLabeling(settings)
+            layer.setLabeling(labeling)
+            layer.setLabelsEnabled(True)
+            layer.triggerRepaint() if repaint else None
+
     class Geometry:
         """общие методы для работы с геометрией"""
+
+        __profile = None
+
+        @classmethod
+        def profile(cls, key=None):
+            if cls.__profile is None:
+                from qgis.PyQt.QtGui import QIcon
+                cls.__profile = {
+                    (QgsWkbTypes.Point, QgsWkbTypes.MultiPoint): {
+                        k.title: u'Точка',
+                        k.icon: QIcon(os.path.join(os.path.dirname(__file__), 'img', 'point.png')),
+                        QgsSimpleMarkerSymbolLayer: {
+                            kp.ru.size: (kp.en.size, kp.en.size_unit, kp.en.size_map_unit_scale),
+                            kp.ru.color: (kp.en.color,),
+                            kp.ru.outline_color: (kp.en.outline_color,),
+                            kp.ru.outline_width: (
+                            kp.en.outline_width, kp.en.outline_width_unit, kp.en.outline_width_map_unit_scale,),
+                            kp.ru.outline_style: (kp.en.outline_style,),
+                            kp.ru.angle: (kp.en.angle,),
+                            kp.ru.name: (kp.en.name,)
+                        },
+                        QgsFontMarkerSymbolLayer: {
+                            kp.ru.font: (kp.en.font,),
+                            kp.ru.chr: (kp.en.chr,),
+                            kp.ru.size: (kp.en.size, kp.en.size_unit, kp.en.size_map_unit_scale),
+                            kp.ru.color: (kp.en.color,),
+                            kp.ru.outline_color: (kp.en.outline_color,),
+                            kp.ru.outline_width: (
+                            kp.en.outline_width, kp.en.outline_width_unit, kp.en.outline_width_map_unit_scale,),
+                            kp.ru.angle: (kp.en.angle,)
+                        }
+                    },
+                    (QgsWkbTypes.LineString, QgsWkbTypes.MultiLineString): {
+                        k.title: u'Линия',
+                        k.icon: QIcon(os.path.join(os.path.dirname(__file__), 'img', 'cut.png')),
+                        QgsSimpleLineSymbolLayer: {
+                            kp.ru.line_color: (kp.en.line_color,),
+                            kp.ru.line_width: (kp.en.line_width, kp.en.line_width_unit, kp.en.width_map_unit_scale,),
+                            kp.ru.offset: (kp.en.offset, kp.en.offset_unit, kp.en.offset_map_unit_scale,),
+                            kp.ru.line_style: (kp.en.line_style,)
+                        },
+                        QgsMarkerLineSymbolLayer: {
+                            kp.ru.placement: (
+                                kp.en.placement,  # <= x
+                                kp.en.interval,  # if x in (interval,)
+                                kp.en.interval_unit,  # if x in (interval,)
+                                kp.en.interval_map_unit_scale,  # if x in (interval,)
+                                kp.en.offset_along_line,  # if x in (interval, firstvertex, lastvertex,)
+                                kp.en.offset_along_line_unit,  # if x in (interval, firstvertex, lastvertex,)
+                                kp.en.offset_along_line_map_unit_scale,  # if x in (interval, firstvertex, lastvertex,)
+                            ),
+                            kp.ru.offset_line: (kp.en.offset, kp.en.offset_unit, kp.en.offset_map_unit_scale,),
+                            kp.ru.marker: (kp.en.marker,)
+                        }
+                    },
+                    (QgsWkbTypes.Polygon, QgsWkbTypes.MultiPolygon): {
+                        k.title: u'Полигон',
+                        k.icon: QIcon(os.path.join(os.path.dirname(__file__), 'img', 'polygon.png')),
+                        QgsSimpleFillSymbolLayer: {
+                            kp.ru.color: (kp.en.color,),
+                            kp.ru.style: (kp.en.style,),
+                            kp.ru.outline_color: (kp.en.outline_color,),
+                            kp.ru.outline_width: (
+                            kp.en.outline_width, kp.en.outline_width_unit, kp.en.border_width_map_unit_scale,),
+                            kp.ru.outline_style: (kp.en.outline_style,)
+                        },
+                        QgsLinePatternFillSymbolLayer: {
+                            kp.ru.angle: (kp.en.angle,),
+                            kp.ru.spacing: (kp.en.distance, kp.en.distance_unit, kp.en.distance_map_unit_scale,),
+                            kp.ru.offset: (kp.en.offset, kp.en.offset_unit, kp.en.offset_map_unit_scale,),
+                            kp.ru.line: (kp.en.line,)
+                        },
+                        QgsPointPatternFillSymbolLayer: {
+                            kp.ru.distance_x: (
+                            kp.en.distance_x, kp.en.distance_x_unit, kp.en.distance_x_map_unit_scale,),
+                            kp.ru.distance_y: (
+                            kp.en.distance_y, kp.en.distance_y_unit, kp.en.distance_y_map_unit_scale,),
+                            kp.ru.displacement_x: (
+                            kp.en.displacement_x, kp.en.displacement_x_unit, kp.en.displacement_x_map_unit_scale,),
+                            kp.ru.displacement_y: (
+                            kp.en.displacement_y, kp.en.displacement_y_unit, kp.en.displacement_y_map_unit_scale,),
+                            kp.ru.marker: (kp.en.marker,)
+                        },
+                        QgsSimpleLineSymbolLayer: {
+                            kp.ru.line: (kp.en.line,)
+                        },
+                        QgsMarkerLineSymbolLayer: {
+                            kp.ru.line: (kp.en.line,)
+                        }
+                    }
+                }
+            return cls.__profile[key] if key else cls.__profile
+
+        @classmethod
+        def types_by_type(cls, wkb_type):
+            """возвращает составной ключ для указанной геометрии"""
+            for key in cls.profile().keys():
+                if wkb_type in key:
+                    return key
+            return None
+
+        @classmethod
+        def title(cls, wkb_type):
+            """возвращает русское название для указанной геометрии"""
+            for key in cls.profile().keys():
+                if wkb_type in key:
+                    return cls.profile()[key][k.title]
+            return None
+
+        @classmethod
+        def icon(cls, wkb_type):
+            """возвращает иконку для указанной геометрии"""
+            for key in cls.profile().keys():
+                if wkb_type in key:
+                    return cls.profile()[key][k.icon]
+            return None
 
         @classmethod
         def random_points(cls, min_count, max_count):
@@ -170,30 +309,35 @@ class Utils:
             return QgsPoint(x, y)
 
         @staticmethod
-        def point(x, y):
+        def from_wkt(wkt):
+            """создает геометрию по строке в формате WKT"""
+            wktx = "^Point{1}[\s]?\([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+\)$|" \
+                   "^MultiPoint{1}[\s]?\((\([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+\)[,]?[\s]?){2,}\)$|" \
+                   "^LineString{1}[\s]?\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)$|" \
+                   "^MultiLineString{1}[\s]?\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)$|" \
+                   "^Polygon{1}[\s]?\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)$|" \
+                   "^MultiPolygon{1}[\s]?\((\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)+[,]?[\s]?)+\)$"
+            return QgsGeometry().fromWkt(wkt) if re.match(wktx, wkt) else None
+
+        @classmethod
+        def point(cls, x, y):
             """возвращает геометрию точки"""
-            point_wkt = 'POINT(%f %f)' % (x, y)
-            return QgsGeometry().fromWkt(point_wkt)
+            return cls.from_wkt('Point (%f %f)' % (x, y))
 
-        @staticmethod
-        def cut(a, b):
+        @classmethod
+        def cut(cls, a, b):
             """возвращает геометрию отрезка"""
-            cut_wkt = 'LINESTRING(%f %f,%f %f)' % (a.x(), a.y(), b.x(), b.y())
-            return QgsGeometry().fromWkt(cut_wkt)
+            return cls.line(points=[a, b])
 
-        @staticmethod
-        def line(points):
+        @classmethod
+        def line(cls, points):
             """возвращает геометрию линии"""
-            coord = ','.join(['%f %f' % (p.x(), p.y()) for p in points])
-            line_wkt = 'LINESTRING(%s)' % coord
-            return QgsGeometry().fromWkt(line_wkt)
+            return cls.from_wkt('LineString (%s)' % ','.join(['%f %f' % (p.x(), p.y()) for p in points]))
 
-        @staticmethod
-        def polygon(points):
+        @classmethod
+        def polygon(cls, points):
             """возвращает геометрию многоугольника"""
-            coord = ','.join(['%f %f' % (p.x(), p.y()) for p in points])
-            line_wkt = 'POLYGON((%s))' % coord
-            return QgsGeometry().fromWkt(line_wkt)
+            return cls.from_wkt('Polygon ((%s))' % ','.join(['%f %f' % (p.x(), p.y()) for p in points]))
 
         @classmethod
         def segments(cls, feature):
@@ -208,6 +352,13 @@ class Utils:
         def selection(only_active=True):
             """список геометрии выбранных фич"""
             return [feature.geometry() for feature in Utils.Feature.selection(only_active)]
+
+        @classmethod
+        def is_point_near_segment(cls, p, s):
+            """точка около сегмента"""
+            segment = cls.cut(s[0], s[1])
+            point = cls.point(p.x(), p.y())
+            return segment.boundingBoxIntersects(point)
 
     class Check:
         """общие проверки перед использованием или в процессе использования инструментов"""
@@ -227,6 +378,54 @@ class Utils:
         def geometry(types, only_active=True):
             """выбранная геометрия имет один из указанных типов"""
             return all(layer.wkbType() in types for layer in Utils.Map.selection(only_active))
+
+        @staticmethod
+        def ready():
+            """слои на карте сохранены"""
+            n = len(Utils.Map.layers(only_editable=True))
+            return n == 0
+
+    class Azimuth:
+        N = 'С %d° %d\' %d\"'
+        NE = 'СВ %d° %d\' %d\"'
+        E = 'В %d° %d\' %d\"'
+        SE = 'ЮВ %d° %d\' %d\"'
+        S = 'Ю %d° %d\' %d\"'
+        SW = 'ЮЗ %d° %d\' %d\"'
+        W = 'З %d° %d\' %d\"'
+        NW = 'СЗ %d° %d\' %d\"'
+
+        @classmethod
+        def get(cls, degrees):
+            gr = int(degrees)
+            mi = int((degrees - gr) * 60)
+            se = int((degrees - gr - mi / 60) * 60 * 60)
+
+            if gr == 270 and mi == 0:
+                return cls.W % (gr - 270, mi, se)
+
+            if gr == 180 and mi == 0:
+                return cls.S % (gr - 180, mi, se)
+
+            if gr == 90 and mi == 0:
+                return cls.E % (gr - 90, mi, se)
+
+            if gr == 0 and mi == 0:
+                return cls.N % (gr - 0, mi, se)
+
+            if gr >= 270 and mi > 0:
+                return cls.NW % (gr - 270, mi, se)
+
+            if gr >= 180 and mi > 0:
+                return cls.SW % (gr - 180, mi, se)
+
+            if gr >= 90 and mi > 0:
+                return cls.SE % (gr - 90, mi, se)
+
+            if gr >= 0 and mi > 0:
+                return cls.NE % (gr - 0, mi, se)
+
+            return None
 
     class System:
         """общие системные утилиты, которые можно использовать не только для написания плагинов QGIS"""
@@ -257,3 +456,10 @@ class Utils:
             with open(file_path, mode='w', encoding='utf-8'):
                 pass
             return file_path
+
+        @staticmethod
+        def parse_tab_file(tab_file):
+            """парсинк названий полей из tab-файла слоя карты MapInfo"""
+            with open(tab_file, encoding='cp1251') as f:
+                return [line.strip().replace(';', '').split(chr(32))[0]
+                        for line in f.readlines() if line.strip().endswith(';')]
