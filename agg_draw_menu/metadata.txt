@@ -1,0 +1,21 @@
+[general]
+name=Простые примеры инструментов
+qgisMinimumVersion=3.0
+description=Рисование
+version=0.1
+author=agg
+email=a@b.ru
+about=В примере представлена активизация инструментов рисования, доступного в меню по кнопке.
+tracker=http://bugs
+repository=http://repo
+hasProcessingProvider=no
+# changelog=
+tags=python
+homepage=http://homepage
+category=Plugins
+icon=.\lib\img\pickaxe.png
+experimental=True
+deprecated=False
+# plugin_dependencies=
+# category=
+server=False

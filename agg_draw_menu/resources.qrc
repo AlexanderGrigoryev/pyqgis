@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/plugins/agg_draw_menu" >
+        <file>/lib/img/point.png</file>
+        <file>/lib/img/line.png</file>
+        <file>/lib/img/polygon.png</file>
+        <file>/lib/img/pickaxe.png</file>
+        <file>/lib/img/logo.png</file>
+    </qresource>
+</RCC>
