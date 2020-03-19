@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import QVariant
 
 from _lib.base_plugin import BasePlugin
 from _lib.base_dialog import BaseDialog
-from _lib.consts import Messages as m, Keys as k, Layer
+from _lib.consts import Messages as m, Tool
 from _lib.utils import Utils
 from .resources import *
 
@@ -78,9 +78,9 @@ class AggCreateMap(BasePlugin):
         qgs_file = Utils.System.new_file(self._map_folder, self._file_name)
         QgsProject().instance().read(qgs_file)
         # добавление новых слоёв
-        points = Utils.Map.new_layer(name=Layer.point, wkb_type=QgsWkbTypes.Point)
-        lines = Utils.Map.new_layer(name=Layer.line, wkb_type=QgsWkbTypes.LineString)
-        polygons = Utils.Map.new_layer(name=Layer.polygon, wkb_type=QgsWkbTypes.Polygon)
+        points = Utils.Map.new_layer(name=Tool.point, wkb_type=QgsWkbTypes.Point)
+        lines = Utils.Map.new_layer(name=Tool.line, wkb_type=QgsWkbTypes.LineString)
+        polygons = Utils.Map.new_layer(name=Tool.polygon, wkb_type=QgsWkbTypes.Polygon)
         # обновление списка атрибутов
         layers = (points, lines, polygons)
         fields = (self._point_fields, self._line_fields, self._polygon_fields)
