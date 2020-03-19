@@ -3,7 +3,8 @@ from abc import ABCMeta, abstractmethod
 from qgis.PyQt.QtCore import Qt, QSize
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QMessageBox, QMenu, QAction
-from .consts import Tool, Keys as k
+from .consts import Keys as k, Messages as m, Tool
+from .utils import Utils
 
 
 class BasePlugin:
@@ -12,6 +13,7 @@ class BasePlugin:
 
     def __init__(self, iface, folder, icon, tool, tools, dialog, ui_file):
         self.iface = iface
+        self.folder = folder
         self.img_folder = os.path.join(folder, 'lib', 'img')
         self.ui_folder = os.path.join(folder, 'ui')
         self.menu = Tool.MENU
@@ -40,7 +42,7 @@ class BasePlugin:
     def q_dialog(self, dialog, ui_file=None, title=None, icon=None):
         result = None
         if dialog:
-            result = dialog(owner=self, ui_file=os.path.join(self.ui_folder, ui_file)) if ui_file else dialog()
+            result = dialog(owner=self, ui_file=ui_file) if ui_file else dialog(owner=self)
             result.setWindowTitle(title if title else self.tool)
             result.setWindowIcon(icon if icon else self.icon)
             result.logo.setPixmap(self.logo.pixmap(QSize(16, 16)))
@@ -118,3 +120,38 @@ class BasePlugin:
     @abstractmethod
     def run(self):
         """проверки перед использованием нструмента, инициализация и вызов диалога при необходимости"""
+
+
+class BaseDrawingPlugin(BasePlugin):
+
+    __metaclass__ = ABCMeta
+
+    def __init__(self, iface, folder, icon, tool, tools, dialog, ui_file):
+        BasePlugin.__init__(self, iface, folder, icon, tool, tools, dialog, ui_file)
+        self._layer = None
+        self.drawing_tool = None
+        self.drawing_tool_name = None
+
+    @property
+    @abstractmethod
+    def layer(self):
+        """слой для сохранения результата рисования"""
+
+    def run(self):
+        self.drawing_tool = None
+        if self.check_map():
+            drawing = self.active_tool[k.drawing_tool]
+            self.drawing_tool = drawing(self.iface.mapCanvas())
+            self.iface.mapCanvas().setMapTool(self.drawing_tool)
+            self.drawing_tool.apply.connect(self.on_apply)
+            self.drawing_tool_name = self.active_tool[k.name]
+
+    def check_map(self):
+        result = Utils.Check.map()
+        if not result:
+            self.msg(m.OPEN_MAP)
+        return result
+
+    @abstractmethod
+    def on_apply(self, data: dict):
+        """обработчик результата рисования"""

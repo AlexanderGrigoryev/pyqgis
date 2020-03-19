@@ -1,14 +1,14 @@
 import os
-import time
-import zipfile
-import shutil
 import random
 import re
-
+import shutil
+import time
+import zipfile
+import numpy
+from scipy.interpolate import BSpline
+from qgis.PyQt.QtWidgets import QFileDialog
 from qgis.core import *
 from qgis.utils import iface
-from qgis.PyQt.QtWidgets import QFileDialog
-
 from .consts import Keys as k, SymbolProp as kp
 
 
@@ -86,7 +86,7 @@ class Utils:
             return [layer for layer in layers if len(layer.selectedFeatures()) > 0]
 
         @staticmethod
-        def new_layer(name, wkb_type, driver='memory'):
+        def new_layer(name, wkb_type, fields=None, labeling=None, driver='memory'):
             """вернёт новый временный слой"""
             layers = QgsProject().instance().mapLayersByName(name)
             layer = layers[0] if layers else None
@@ -94,6 +94,11 @@ class Utils:
                 url = '%s?crs=epsg:4326' % Utils.Geometry.wkt_type(wkb_type)
                 layer = QgsVectorLayer(url, name, driver)
                 layer.setCrs(QgsProject().instance().crs())
+                if fields:
+                    layer.dataProvider().addAttributes(fields)
+                    layer.updateFields()
+                if labeling:
+                    Utils.Feature.labeling(layer=layer, view_attr=labeling[0], x_attr=labeling[1], y_attr=labeling[2])
                 QgsProject().instance().addMapLayer(layer)
                 iface.mapCanvas().refresh()
             return layer
@@ -130,8 +135,8 @@ class Utils:
     class Feature:
         """общие методы для работы с фичами и их атрибутами"""
 
-        @staticmethod
-        def new_feature(layer, points, values):
+        @classmethod
+        def new_feature(cls, layer, points, values=None):
             """
             создает новую фичу на слое layer, с соответствующей геометрией и координатами points, заполняя
             все возможные атрибуты из словаря values
@@ -143,15 +148,25 @@ class Utils:
                 geometry = Utils.Geometry.line(points)
             if Utils.Map.is_polygon_layer(layer):
                 geometry = Utils.Geometry.polygon(points)
+            return cls.new_feature_geometry(layer, geometry, values)
+
+        @classmethod
+        def new_feature_geometry(cls, layer, geometry, values=None):
+            """
+            создает новую фичу на слое layer, с геометрией geometry, заполняя все возможные атрибуты из словаря values
+            """
             if not geometry:
                 return None
-            attributes = [values[field_name] if field_name in values else None
-                          for field_name in layer.fields().names()]
             feature = QgsFeature()
             feature.setGeometry(geometry)
-            feature.setAttributes(attributes)
+            if values:
+                attributes = [values[field_name] if field_name in values else None
+                              for field_name in layer.fields().names()] if isinstance(values, dict) else list(values)
+                feature.setAttributes(attributes)
             layer.dataProvider().addFeature(feature)
             layer.updateExtents()
+            layer.triggerRepaint()
+            return feature
 
         @staticmethod
         def selection(only_active=True):
@@ -162,13 +177,24 @@ class Utils:
             return features
 
         @staticmethod
-        def labeling(layer, attribute, repaint=False):
+        def labeling(layer, view_attr, x_attr=None, y_attr=None):
             settings = QgsPalLayerSettings()
-            settings.fieldName = attribute
+            settings.format().shadow().setEnabled(True)
+            fmt = settings.format()
+            font = fmt.font()
+            font.setFamily('Courier New')
+            fmt.setFont(font)
+            fmt.setSize(8)
+            settings.setFormat(fmt)
+            settings.fieldName = view_attr
+            if x_attr and y_attr:
+                props = settings.dataDefinedProperties()
+                props.property(QgsPalLayerSettings.PositionX).setField(x_attr)
+                props.property(QgsPalLayerSettings.PositionY).setField(y_attr)
             labeling = QgsVectorLayerSimpleLabeling(settings)
             layer.setLabeling(labeling)
             layer.setLabelsEnabled(True)
-            layer.triggerRepaint() if repaint else None
+            layer.triggerRepaint()
 
         @staticmethod
         def combine_geometry(features):
@@ -336,18 +362,20 @@ class Utils:
         @staticmethod
         def from_wkt(wkt):
             """создает геометрию по строке в формате WKT"""
-            wktx = "^Point{1}[\s]?\([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+\)$|" \
-                   "^MultiPoint{1}[\s]?\((\([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+\)[,]?[\s]?){2,}\)$|" \
-                   "^LineString{1}[\s]?\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)$|" \
-                   "^MultiLineString{1}[\s]?\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)$|" \
-                   "^Polygon{1}[\s]?\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)$|" \
-                   "^MultiPolygon{1}[\s]?\((\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)+[,]?[\s]?)+\)$"
-            return QgsGeometry().fromWkt(wkt) if re.match(wktx, wkt) else None
+            return QgsGeometry().fromWkt(wkt) if Utils.Check.is_wkt(wkt) else None
 
         @classmethod
         def point(cls, x, y):
             """возвращает геометрию точки"""
             return cls.from_wkt('Point (%f %f)' % (x, y))
+
+        @staticmethod
+        def point_from_wkt(wkt):
+            if not Utils.Check.is_point_wkt(wkt):
+                return None
+            p = QgsPoint()
+            p.fromWkt(wkt)
+            return p
 
         @classmethod
         def cut(cls, a, b):
@@ -362,6 +390,7 @@ class Utils:
         @classmethod
         def polygon(cls, points):
             """возвращает геометрию многоугольника"""
+            points.append(points[0]) if points[:1] != points[-1:] else None
             return cls.from_wkt('Polygon ((%s))' % ','.join(['%f %f' % (p.x(), p.y()) for p in points]))
 
         @classmethod
@@ -418,6 +447,33 @@ class Utils:
             n = len(Utils.Map.layers(only_editable=True))
             return n == 0
 
+        @classmethod
+        def is_wkt(cls, wkt):
+            return cls.is_point_wkt(wkt, strict=False) \
+                   or cls.is_line_wkt(wkt, strict=False) \
+                   or cls.is_polygon_wkt(wkt, strict=False)
+
+        @staticmethod
+        def is_point_wkt(wkt, strict=True, multi=False):
+            s = "^Point{1}[\s]?\([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+\)$"
+            m = "^MultiPoint{1}[\s]?\((\([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+\)[,]?[\s]?){2,}\)$"
+            wktx = s+"|"+m if not strict else m if multi else s
+            return re.match(wktx, wkt)
+
+        @staticmethod
+        def is_line_wkt(wkt, strict=True, multi=False):
+            s = "^LineString{1}[\s]?\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)$"
+            m = "^MultiLineString{1}[\s]?\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)$"
+            wktx = s+"|"+m if not strict else m if multi else s
+            return re.match(wktx, wkt)
+
+        @staticmethod
+        def is_polygon_wkt(wkt, strict=True, multi=False):
+            s = "^Polygon{1}[\s]?\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)$"
+            m = "^MultiPolygon{1}[\s]?\((\((\(([0-9]*[.]?[0-9]+\s[0-9]*[.]?[0-9]+[,]?[\s]?){2,}\)+[,]?[\s]?)+\)+[,]?[\s]?)+\)$"
+            wktx = s+"|"+m if not strict else m if multi else s
+            return re.match(wktx, wkt)
+
     class Azimuth:
         N = 'С %d° %d\' %d\"'
         NE = 'СВ %d° %d\' %d\"'
@@ -459,6 +515,27 @@ class Utils:
                 return cls.NE % (gr - 0, mi, se)
 
             return None
+
+    class Algorithm:
+        """общие алгоритмы"""
+
+        @staticmethod
+        def b_spline(curve, total, degree, closed):
+            curve = numpy.asarray(curve)
+            count = curve.shape[0]
+
+            if closed:
+                kv = numpy.arange(-degree, count + degree + 1)
+                factor, fraction = divmod(count + degree + 1, count)
+                curve = numpy.roll(numpy.concatenate((curve,) * factor + (curve[:fraction],)), -1, axis=0)
+                degree = numpy.clip(degree, 1, degree)
+            else:
+                degree = numpy.clip(degree, 1, count - 1)
+                kv = numpy.clip(numpy.arange(count + degree + 1) - degree, 0, count - degree)
+
+            max_param = count - (degree * (1 - closed))
+            spline = BSpline(kv, curve, degree)
+            return spline(numpy.linspace(0, max_param, total))
 
     class System:
         """общие системные утилиты, которые можно использовать не только для написания плагинов QGIS"""

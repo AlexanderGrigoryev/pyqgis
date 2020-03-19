@@ -1,16 +1,18 @@
+import os
+from time import sleep
+
 from qgis.core import QgsApplication
 from qgis.PyQt import uic
 from qgis.PyQt.QtGui import QTextCursor
-from qgis.PyQt.QtWidgets import QApplication, QDialog, QTextBrowser
-
-from time import sleep
+from qgis.PyQt.QtWidgets import QApplication, QDialog, QTextBrowser, QLabel
 
 
 class BaseDialog(QDialog):
     def __init__(self, owner, ui_file):
         super(BaseDialog, self).__init__(parent=None)
-        uic.loadUi(ui_file, self)
         self.owner = owner
+        uic.loadUi(uifile=os.path.join(self.owner.ui_folder, ui_file),
+                   baseinstance=self)
         self.check_ready = lambda: True
 
     @property
@@ -46,8 +48,9 @@ class BaseWizardDialog(BaseDialog):
 class Logger:
     """писатель в журнал"""
 
-    def __init__(self, log: QTextBrowser):
+    def __init__(self, log: QTextBrowser, total: QLabel = None):
         self._log = log
+        self._total = total
 
     def log(self, text=''):
         if not self._log:
@@ -56,3 +59,11 @@ class Logger:
         self._log.insertHtml('<div>%s</div><br />' % text)
         self._log.moveCursor(QTextCursor.End)
         QApplication.processEvents()
+
+    def set_total(self):
+        if not self._total:
+            return
+        delimiter = ': '
+        label, count = self._total.text().split(delimiter)
+        count = int(count) + 1
+        self._total.setText(''.join([label, delimiter, str(count)]))

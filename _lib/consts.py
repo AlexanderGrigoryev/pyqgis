@@ -6,6 +6,7 @@ class Keys:
     icon = 'icon'
     callback = 'callback'
     dialog = 'dialog'
+    drawing_tool = 'drawing_tool'
     geometry = 'geometry'
     segments = 'segments'
     feature = 'feature'
@@ -43,37 +44,67 @@ class Keys:
     inside = 'inside'
     outside = 'outside'
     mask = 'mask'
+    base_line = 'base_line'
+    base_cuts = 'base_cuts'
+    remoteness = 'remoteness'
+    total = 'total'
+    line = 'line'
+    polygon = 'polygon'
+    top_left = 'top_left'
+    perpendicular = 'perpendicular'
+    vertex = 'vertex'
+    before = 'before'
+    copy = 'copy'
+    count = 'count'
+    closed = 'closed'
+    checks = 'checks'
 
     class Tool:
         """ключи доступа к настройкам инструментов"""
+        crop_inside = 'crop_inside'
+        crop_outside = 'crop_outside'
+        distance = 'distance'
+        remoteness = 'remoteness'
         point = 'point'
-        line = 'linestring'
+        line = 'line'
+        polyline = 'polyline'
         polygon = 'polygon'
+        perpendicular = 'perpendicular'
+        parallel = 'parallel'
+        polyline_spline = 'polyline_spline'
+        polygon_spline = 'polygon_spline'
 
 
 class Header:
     """названия и заголовки полей таблицы атрибутов"""
     cut = 'Отрезок'
+    label = 'Метка'
     distance = 'Длина'
     azimuth = 'Румб'  # см. определение в большой российской энциклопедии
     point = 'Точка'
     x = 'X'
     y = 'Y'
+    x1 = 'x1'
+    y1 = 'y1'
+    x2 = 'x2'
+    y2 = 'y2'
 
 
 class Tool:
     """названия инструментов"""
     MENU = u'&ТомскНИПИнефть'
-    point = u'Рисование точек'
-    line = u'Рисование линий'
-    polygon = u'Рисование многоугольников'
-
-
-class Layer:
-    """названия слоёв"""
-    point = u'Слой точек'
-    line = u'Слой линий'
-    polygon = u'Слой многоугольников'
+    crop_outside = u'Обрезать снаружи маски'
+    crop_inside = u'Обрезать внутри маски'
+    distance = u'Длина линии'
+    remoteness = u'Удаленность объектов'
+    point = u'Символ по координатам'
+    line = u'Линия по координатам'
+    polyline = u'Полилиния по координатам'
+    polygon = u'Многоугольник по координатам'
+    perpendicular = u'Построить перпендикуляр к линии'
+    parallel = u'Построение параллельных объектов'
+    polyline_spline = u'Создать ломаную используя В-сплайн'
+    polygon_spline = u'Создать многоугольник используя В-сплайн'
 
 
 class SymbolProp:
@@ -183,6 +214,7 @@ class SymbolProp:
 
 class Messages:
     """сообщения, вопросы и т.д."""
+    _ERROR = u' : <font color=red>Ошибка</font>'
     READY = u'Готово'
     ERROR = u'Ошибка'
     OPEN_MAP = u'Откройте карту'
@@ -191,6 +223,8 @@ class Messages:
     CHOOSE_OBJECTS = u'Выберите один или несколько объектов'
     CHOOSE_POLYGON = u'Выберите полигон и примените инструмент'
     CHOOSE_POLYGONS = u'Выберите один или несколько полигонов и примените инструмент'
+    CHOOSE_LINE_OR_POLYGON = u'Выберите линию или полигон'
+    CHOOSE_LINE_OR_POLYGON_LAYER = u'Выберите слой с линиями или полигонами'
     CHOOSE_ALIGN_MODE = u'Выберите границы выравнивания'
     SAVE_OR_DISCARD = u'Сохраните или отклоните изменения'
     UNKNOWN_GEOMETRY_TYPE = u'Тип геометрии не обрабатывается инструментом'
@@ -201,3 +235,12 @@ class Messages:
     BORDER_IN_LINES = u'Опорные и корректируемые линии должны быть разными'
     SAVE_EDITABLE = u'Есть не сохраненные изменения.\n\nСохранить?'
     DISCARD_EDITABLE = u'Отменить изменения?'
+    INPUT = u'Введены координаты: %s = %f и %s = %f'
+    POINT_CREATED = u'Создана точка (%f;%f)'
+    LINE_CREATED = u'Создана линия %s, %s'
+    POLYLINE_CREATED = u'Создана полилиния'
+    POLYGON_CREATED = u'Создан полигон'
+    POINT_CREATED_ERROR = POINT_CREATED + _ERROR
+    LINE_CREATED_ERROR = LINE_CREATED + _ERROR
+    POLYLINE_CREATED_ERROR = POLYLINE_CREATED + _ERROR
+    POLYGON_CREATED_ERROR = POLYLINE_CREATED + _ERROR
