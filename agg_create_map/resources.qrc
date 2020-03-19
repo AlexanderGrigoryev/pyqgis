@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/plugins/agg_button" >
+    <qresource prefix="/plugins/agg_create_map" >
         <file>/lib/img/layers.png</file>
         <file>/lib/img/logo.png</file>
     </qresource>
