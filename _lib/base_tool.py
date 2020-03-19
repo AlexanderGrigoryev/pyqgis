@@ -79,6 +79,7 @@ class BaseTool(QgsMapToolEmitPoint):
     def markers(self):
         if not self._markers:
             line_points = self.line_points
+            line_points = line_points if line_points else self.points
             for point in line_points:
                 index = line_points.index(point)
                 is_extreme_point = index == 0 or index == len(line_points)-1
