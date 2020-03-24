@@ -5,6 +5,7 @@ import shutil
 import time
 import zipfile
 import numpy
+import math
 from scipy.interpolate import BSpline
 from qgis.PyQt.QtWidgets import QFileDialog
 from qgis.core import *
@@ -14,6 +15,16 @@ from .consts import Keys as k, SymbolProp as kp
 
 class Utils:
     """общие утилиты для написания плагинов QGIS"""
+
+    class qgis:
+        """проброс втроенных в api утилит"""
+        __utils = None
+
+        @classmethod
+        def utils(cls):
+            if cls.__utils is None:
+                cls.__utils = QgsGeometryUtils()
+            return cls.__utils
 
     class Compiler:
         """компилятор плагинов"""
@@ -78,6 +89,20 @@ class Utils:
         def nodes():
             """список узлов дерева слоёв карты"""
             return QgsProject().instance().layerTreeRoot().children()
+
+        @classmethod
+        def show(cls, layer):
+            """отображает слой"""
+            if layer:
+                node = [x for x in cls.nodes() if x.layerId() == layer.id()][0]
+                node.setItemVisibilityChecked(True)
+
+        @classmethod
+        def hide(cls, layer):
+            """скрывает слой"""
+            if layer:
+                node = [x for x in cls.nodes() if x.layerId() == layer.id()][0]
+                node.setItemVisibilityChecked(False)
 
         @staticmethod
         def selection(only_active=True):
@@ -174,6 +199,16 @@ class Utils:
             features = []
             for layer in Utils.Map.selection(only_active):
                 features += layer.selectedFeatures()
+            return features
+
+        @staticmethod
+        def intersected(geometry, only_active=True):
+            """список фич, имеющих пересечение с указанной геометрией"""
+            layers = [iface.activeLayer()] if only_active else Utils.Map.layers()
+            features = []
+            for layer in layers:
+                if Utils.Map.is_line_layer(layer) or Utils.Map.is_polygon_layer(layer):
+                    features += [feature for feature in layer.getFeatures() if geometry.intersects(feature.geometry())]
             return features
 
         @staticmethod
@@ -364,6 +399,22 @@ class Utils:
             """создает геометрию по строке в формате WKT"""
             return QgsGeometry().fromWkt(wkt) if Utils.Check.is_wkt(wkt) else None
 
+        @staticmethod
+        def list_points(geometry, excluded=None):
+            """возвращает список точек-вершин указанной геометрии"""
+            result = []
+            for vertex in geometry.vertices():
+                if excluded:
+                    if vertex in excluded:
+                        continue
+                result.append(vertex)
+            return result
+
+        @classmethod
+        def list_pointsXY(cls, geometry, excluded=None):
+            """возвращает список точек-вершин указанной геометрии"""
+            return [cls.as_pointXY(p) for p in cls.list_points(geometry, excluded)]
+
         @classmethod
         def point(cls, x, y):
             """возвращает геометрию точки"""
@@ -376,6 +427,31 @@ class Utils:
             p = QgsPoint()
             p.fromWkt(wkt)
             return p
+
+        @classmethod
+        def arc(cls, p0, p1, p2, longest=False):
+            """возвращает дугу окружности с центром в p0, разделенную треугольником p0,p1,p2"""
+            pp0, pp1, pp2 = (cls.as_point(p) for p in (p0, p1, p2))
+            triangle = cls.polygon([pp0, pp1, pp2])
+            l1, l2 = cls.cut(pp0, pp1), cls.cut(pp0, pp2)
+            d1, d2 = l1.length(), l2.length()
+            d = min(d1, d2)
+            a1, a2 = pp0.azimuth(pp1), pp0.azimuth(pp2)
+            a = min(a1, a2)
+            circle_points = QgsCircle().fromCenterDiameter(center=pp0, diameter=d, azimuth=a).points()
+            circle = cls.polygon(points=circle_points)
+            segment = circle.intersection(triangle)
+            short = cls.list_points(geometry=segment)
+            short.pop()
+            short.pop()
+            short.pop() if pp0 in short else None
+            long = []
+            for p in circle_points:
+                gp = cls.from_wkt(p.asWkt())
+                in_small = triangle.intersects(gp) or circle_points.index(p) == 0
+                long.append(p) if not in_small else None
+            long = short[-1:] + long + short[:1]
+            return cls.line(points=long if longest else short)
 
         @classmethod
         def cut(cls, a, b):
@@ -394,9 +470,9 @@ class Utils:
             return cls.from_wkt('Polygon ((%s))' % ','.join(['%f %f' % (p.x(), p.y()) for p in points]))
 
         @classmethod
-        def segments(cls, feature):
+        def segments(cls, geometry):
             """возвращает список сегментов фичи"""
-            vertices = feature.geometry().vertices()
+            vertices = geometry.vertices()
             points = []
             while vertices.hasNext():
                 points.append(vertices.next())
@@ -406,6 +482,11 @@ class Utils:
         def selection(only_active=True):
             """список геометрии выбранных фич"""
             return [feature.geometry() for feature in Utils.Feature.selection(only_active)]
+
+        @staticmethod
+        def intersected(geometry, only_active=True):
+            """список геометрии, имеющие пересечение с указанной"""
+            return [feature.geometry() for feature in Utils.Feature.intersected(geometry, only_active)]
 
         @classmethod
         def is_point_near_segment(cls, p, s):
@@ -447,6 +528,11 @@ class Utils:
             n = len(Utils.Map.layers(only_editable=True))
             return n == 0
 
+        @staticmethod
+        def is_angle(value, is_radian):
+            degrees = math.degrees(value) if is_radian else value
+            return 0.0 < round(degrees, 8) < 360
+
         @classmethod
         def is_wkt(cls, wkt):
             return cls.is_point_wkt(wkt, strict=False) \
@@ -485,7 +571,8 @@ class Utils:
         NW = 'СЗ %d° %d\' %d\"'
 
         @classmethod
-        def get(cls, degrees):
+        def get(cls, value, is_radian=False):
+            degrees = math.degrees(value) if is_radian else value
             gr = int(degrees)
             mi = int((degrees - gr) * 60)
             se = int((degrees - gr - mi / 60) * 60 * 60)
