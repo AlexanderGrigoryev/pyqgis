@@ -160,19 +160,40 @@ class Utils:
     class Feature:
         """общие методы для работы с фичами и их атрибутами"""
 
+        @staticmethod
+        def attributes_to_dict(layer, values, index_as_key=False):
+            """подготовка переданных значений в виде словаря для записи в таблицу атрибутов указанного слоя"""
+            keys = layer.attributeList() if index_as_key else layer.fields().names()
+
+            if isinstance(values, list):
+                return {a[0]: a[1] for a in list(zip(keys, values))}
+
+            if isinstance(values, dict):
+                return values
+
+            return {key: None for key in keys}
+
+        @staticmethod
+        def attributes_to_list(layer, values):
+            """подготовка переданных значений в виде списка для записи в таблицу атрибутов указанного слоя"""
+            if isinstance(values, dict):
+                return [values[field_name] if field_name in values else None for field_name in layer.fields().names()]
+
+            if isinstance(values, list):
+                return values
+
+            try:
+                return list(values)
+            except TypeError:
+                return []
+
         @classmethod
         def new_feature(cls, layer, points, values=None):
             """
             создает новую фичу на слое layer, с соответствующей геометрией и координатами points, заполняя
             все возможные атрибуты из словаря values
             """
-            geometry = None
-            if Utils.Map.is_point_layer(layer):
-                geometry = Utils.Geometry.point(points[0].x(), points[0].y())
-            if Utils.Map.is_line_layer(layer):
-                geometry = Utils.Geometry.line(points)
-            if Utils.Map.is_polygon_layer(layer):
-                geometry = Utils.Geometry.polygon(points)
+            geometry = Utils.Geometry.from_points(layer, points)
             return cls.new_feature_geometry(layer, geometry, values)
 
         @classmethod
@@ -185,13 +206,24 @@ class Utils:
             feature = QgsFeature()
             feature.setGeometry(geometry)
             if values:
-                attributes = [values[field_name] if field_name in values else None
-                              for field_name in layer.fields().names()] if isinstance(values, dict) else list(values)
+                attributes = cls.attributes_to_list(layer, values)
                 feature.setAttributes(attributes)
             layer.dataProvider().addFeature(feature)
             layer.updateExtents()
             layer.triggerRepaint()
             return feature
+
+        @classmethod
+        def replace_feature_geometry(cls, layer, feature, points):
+            """заменяет геометрию фичи (id фичи остается неизменным)"""
+            geometry = Utils.Geometry.from_points(layer, points)
+            layer.changeGeometry(feature.id(), geometry) if geometry else None
+
+        @classmethod
+        def replace_feature_attributes(cls, layer, feature, values):
+            """заменяет значения атрибутов фичи (id фичи остается неизменным)"""
+            attributes = cls.attributes_to_dict(layer, values, index_as_key=True)
+            layer.changeAttributeValues(feature.id(), attributes)
 
         @staticmethod
         def selection(only_active=True):
@@ -399,6 +431,18 @@ class Utils:
             """создает геометрию по строке в формате WKT"""
             return QgsGeometry().fromWkt(wkt) if Utils.Check.is_wkt(wkt) else None
 
+        @classmethod
+        def from_points(cls, layer, points):
+            """создаёт геометрию из точек на указанном слое"""
+            geometry = None
+            if Utils.Map.is_point_layer(layer):
+                geometry = cls.point(points[0].x(), points[0].y())
+            if Utils.Map.is_line_layer(layer):
+                geometry = cls.line(points)
+            if Utils.Map.is_polygon_layer(layer):
+                geometry = cls.polygon(points)
+            return geometry
+
         @staticmethod
         def list_points(geometry, excluded=None):
             """возвращает список точек-вершин указанной геометрии"""
@@ -429,13 +473,22 @@ class Utils:
             return p
 
         @classmethod
+        def angle_points(cls, z, c, d, sharp):
+            """возвращает список точек для обозначения угла"""
+            arc = Utils.Geometry.arc(z, c, d, longest=not sharp)
+            result = cls.list_pointsXY(arc)
+            result = [z, d] + result + [c, z]
+            return result
+
+        @classmethod
         def arc(cls, p0, p1, p2, longest=False):
             """возвращает дугу окружности с центром в p0, разделенную треугольником p0,p1,p2"""
             pp0, pp1, pp2 = (cls.as_point(p) for p in (p0, p1, p2))
             triangle = cls.polygon([pp0, pp1, pp2])
             l1, l2 = cls.cut(pp0, pp1), cls.cut(pp0, pp2)
             d1, d2 = l1.length(), l2.length()
-            d = min(d1, d2)
+            h = Utils.qgis.utils().perpendicularSegment(pp0, pp1, pp2).length()
+            d = min(d1, d2, h)
             a1, a2 = pp0.azimuth(pp1), pp0.azimuth(pp2)
             a = min(a1, a2)
             circle_points = QgsCircle().fromCenterDiameter(center=pp0, diameter=d, azimuth=a).points()
@@ -623,6 +676,34 @@ class Utils:
             max_param = count - (degree * (1 - closed))
             spline = BSpline(kv, curve, degree)
             return spline(numpy.linspace(0, max_param, total))
+
+        @staticmethod
+        def bisector(a, b, c, plus_angles=None):
+            """вычисляет биссектрису угла BAC в виде двух точек: A и точка на стороне BC или на её отражении на 180°"""
+            a, b, c = (Utils.Geometry.as_point(p) for p in [a, b, c])
+            ab, ac, bc = Utils.Geometry.cut(a, b), Utils.Geometry.cut(a, c), Utils.Geometry.cut(b, c)
+            r = min(ab.length(), ac.length())
+            d = 2*r
+            n = 99
+
+            a_circle = Utils.Geometry.line(QgsCircle().fromCenterDiameter(a, d).points(n))
+
+            ab_center = ab.intersection(a_circle).vertexAt(0)
+            ab_circle = QgsCircle().fromCenterDiameter(ab_center, d)
+
+            ac_center = ac.intersection(a_circle).vertexAt(0)
+            ac_circle = QgsCircle().fromCenterDiameter(ac_center, d)
+
+            r, p1, p2 = ab_circle.intersections(ac_circle)
+            x, m, y = Utils.qgis.utils().segmentIntersection(p1, p2, b, c)
+
+            if plus_angles:
+                total = sum(plus_angles)
+                am = Utils.Geometry.cut(a, m)
+                am.rotate(rotation=total, center=Utils.Geometry.as_pointXY(a))
+                m = am.vertexAt(1)
+
+            return a, m
 
     class System:
         """общие системные утилиты, которые можно использовать не только для написания плагинов QGIS"""
